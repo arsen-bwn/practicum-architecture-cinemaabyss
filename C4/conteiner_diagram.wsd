@@ -1,0 +1,94 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+Title Кинобездна — Контейнерная диаграмма (To-Be)
+
+Person(user, "Пользователь", "Мобильные/веб/SmartTV клиенты")
+Person(admin, "Администратор", "Операторы и админы")
+
+System_Boundary(system, "Кинобездна") {
+
+  Container(apiGateway, "API Gateway / Ingress", "REST/gRPC, auth, routing, rate limit", "Kong/NGINX/Envoy")
+  Container(webApp, "Frontends (Web / Mobile / TV)", "SPA / Native / SmartTV apps", "React / Native / TV SDK")
+  Container(authService, "Auth Service", "Управление сессиями, JWT, OAuth", "Go")
+  Container(userService, "User Service", "Профили, подписки, watchlist", "Go + PostgreSQL")
+  Container(metadataService, "Metadata Service (выделен как MVP)", "Фильмы, жанры, актёры, оценки", "Go + PostgreSQL / ElasticSearch")
+  Container(contentIngest, "Content Ingest / Connectors", "Подключение контент-провайдеров, обработка фидов", "Go / Workers")
+  Container(searchService, "Search Service", "Поиск по каталогу, фаcеты", "ElasticSearch")
+  Container(recommendationAdapter, "Recommendation Adapter", "Интегратор внешней рекомм. системы", "Go")
+  Container(playbackService, "Playback / Stream Proxy", "Авторизация запуска, генерация ссылок на CDN", "Go")
+  Container(subscriptionService, "Subscription & Billing", "Планы, биллинг, интеграция с платежами", "Go + PostgreSQL")
+  Container(ratingsService, "Ratings & Reviews", "Оценки, комментарии", "Go + PostgreSQL")
+  Container(favoritesService, "Favorites / Playlists", "Списки пользователя", "Go + PostgreSQL/Redis")
+  Container(analyticsService, "Analytics Service", "Сбор событий просмотра, агрегаты", "Go + ClickHouse/Kafka consumer")
+  Container(notificationService, "Notification Service", "Email / Push / In-app", "Go + SMTP/Twilio")
+  
+  Container(messageBroker, "Event Bus (Kafka)", "Асинхронный обмен: events, streams", "Kafka")
+  Container(objectStorage, "Object Storage (S3)", "Хранение артов, буклетов, треков", "S3/MinIO")
+  Container(cache, "Cache (Redis)", "Кеш, сессии, rate limiting", "Redis")
+ 
+ Container_Boundary(orkestration,"CI/CD"){
+  Container(serviceMesh, "Service Mesh", "mTLS, observability", "Istio/Linkerd (опционально)")
+  Container(k8s, "Kubernetes Cluster", "Контейнерная платформа (Helm, CRDs)", "K8s + Helm")
+  Container(ciCd, "CI/CD Pipeline", "Build, test, deploy (Helm + GitOps)", "GitHub Actions / ArgoCD / Jenkins")
+  Container(monitoring, "Monitoring / Logging", "Prometheus, Grafana, ELK, Jaeger", "Observability stack") 
+ }
+}
+ Container_Ext(paymentGateways, "Платёжные шлюзы", "Stripe/Adyen/банки")
+  Container_Ext(cdn, "CDN / Streaming CDN", "Cloud CDN / HLS/ DASH delivery")
+  Container_Ext(recommendationEngine, "Внешняя Recommendation System", "ML provider / in-house external")
+  Container_Ext(loyaltyPartners, "Лояльность / Маркетплейсы", "API интеграции")
+
+' Внешние связи
+Rel(user, apiGateway, "HTTPS / WebSocket (UI)", "TLS")
+Rel(admin, apiGateway, "HTTPS (Admin Console)", "TLS")
+
+' Gateway <-> Frontends
+Rel(apiGateway, webApp, "Предоставляет API для фронтендов", "HTTPS")
+
+' Gateway -> сервисы (sync)
+Rel(apiGateway, authService, "Аутентификация / авторизация", "HTTP/gRPC")
+Rel(apiGateway, userService, "Профили, настройки, подписки", "HTTP/gRPC")
+Rel(apiGateway, metadataService, "Каталог / метаданные / карточки фильма", "HTTP/gRPC")
+Rel(apiGateway, searchService, "Поиск", "HTTP")
+Rel(apiGateway, playbackService, "Запросы на воспроизведение", "HTTP")
+Rel(apiGateway, subscriptionService, "Управление подписками", "HTTP")
+Rel(apiGateway, ratingsService, "Оценки и отзывы", "HTTP")
+Rel(apiGateway, favoritesService, "Избранное / плейлисты", "HTTP")
+Rel(apiGateway, notificationService, "Настройки уведомлений", "HTTP")
+
+' Async
+Rel(metadataService, messageBroker, "Публикует: обновления каталога, events", "Kafka")
+Rel(contentIngest, messageBroker, "Публикует: new content, ingestion events", "Kafka")
+Rel(playbackService, messageBroker, "Публикует: playback events (start/stop)", "Kafka")
+Rel(userService, messageBroker, "Публикует: user events (signup, change)", "Kafka")
+Rel(ratingsService, messageBroker, "Публикует: rating events", "Kafka")
+Rel(messageBroker, analyticsService, "Поставляет события для аналитики", "Kafka")
+Rel(messageBroker, recommendationEngine, "Подача событий для рекоммендера", "Kafka")
+Rel( messageBroker, notificationService, "Отправлять оповищения", "Kafka")
+Rel(favoritesService, messageBroker, "Уведомляет о лайках, избранных", "Kafka")
+
+' Sync 
+Rel(contentIngest, metadataService, "Передаёт/обновляет метаданные", "HTTP")
+Rel(subscriptionService, paymentGateways, "Платёжные операции / Webhooks", "HTTPS / Webhooks")
+Rel(playbackService, cdn, "Генерация/использование CDN ссылок", "S3 / Signed URLs")
+Rel(metadataService, recommendationAdapter, "Запрос каруселей/метаданных", "HTTP")
+Rel(recommendationAdapter, recommendationEngine, "Запрос рекомендаций / отдача событий", "HTTP / Kafka")
+
+
+Rel(metadataService, objectStorage, "Хранит обложки, превью", "S3 API")
+Rel(analyticsService, objectStorage, "Хранит отчёты и снимки данных", "S3 API")
+Rel(userService, cache, "Сохраняет сессии / быстрый доступ", "Redis")
+Rel(apiGateway, cache, "Rate limiting / sessions", "Redis")
+
+
+Rel(k8s, apiGateway, "Деплой сервисов (Helm charts)", "kubectl / Helm")
+Rel(ciCd, k8s, "CI/CD (build → image → deploy) / GitOps", "ArgoCD / Helm")
+Rel(k8s, monitoring, "Собирает метрики/логи", "Prometheus/ELK")
+Rel(k8s, serviceMesh, "Поддержка сетевого уровня", "mTLS / tracing")
+
+
+Rel(userService, loyaltyPartners, "Запросы / интеграция скидок", "HTTPS")
+Rel(subscriptionService, loyaltyPartners, "Акции / промокоды", "HTTPS")
+
+@enduml
