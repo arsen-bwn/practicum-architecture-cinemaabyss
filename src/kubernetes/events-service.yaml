@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
       - name: events-service
-        image: ghcr.io/arsen-bwn/architecture-cinemaabyss-main-2/events-service:latest
+        image: ghcr.io/arsen-bwn/practicum-architecture-cinemaabyss/events-service:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8082

@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
       - name: proxy-service
-        image: ghcr.io/arsen-bwn/architecture-cinemaabyss-main-2/proxy-service:latest
+        image: ghcr.io/arsen-bwn/practicum-architecture-cinemaabyss/proxy-service:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
