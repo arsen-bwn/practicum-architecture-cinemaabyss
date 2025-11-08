@@ -1,0 +1,53 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+Title Kinobezdna — C4 Context (To-Be)
+
+Person(customer, "Viewer / Customer", "Пользователь: мобильные, ТВ, web")
+Person(admin, "Content Admin", "Менеджеры контента и админ-панель")
+System_Boundary(kino, "Kinobezdna Platform") {
+  System(webApp, "Web/Mobile/TV Clients", "UI приложения: Web, Mobile, SmartTV (React/Native/TV SDK)")
+  System(apiGateway, "API Gateway", "Единая точка входа (REST/gRPC), аутентификация, rate limit)")
+  System(authService, "Auth & User Service", "Аутентификация и управление профилями")
+  System(catalog, "Catalog / Metadata Service", "Фильмы, сериалы, жанры, актёры, рейтинги")
+  System(content, "Content Delivery Service", "Интеграция с CDN, прокси, manifest generation")
+  System(subscription, "Subscription & Billing", "Управление подписками, планами, выставление счетов")
+  System(payments, "Payments Adapter", "Интеграция с платёжными провайдерами (webhooks)")
+  System(search, "Search Service", "Elasticsearch для поиска и фасетов")
+  System(recommender, "Recommender Adapter", "Интеграция с внешней рекомендательной системой")
+  System(notifications, "Notification Service", "Email/SMS/Push/In-app уведомления")
+  System(analytics, "Analytics / Event Pipeline", "Сбор событий и аналитика (Kafka → ClickHouse)")
+  System(adminUI, "Admin / CMS", "Управление каталогом и контентом")
+}
+
+System_Ext(paymentProvider, "Payment Provider", "Stripe/Adyen/Bank API — внешняя платёжная система")
+System_Ext(loyalty, "Loyalty & Marketplace", "Сервисы лояльности/маркетплейсы — внешние партнёры")
+System_Ext(cdn, "CDN / Video Storage", "Content Delivery Network / Object Storage (S3) для видео")
+System_Ext(recSystemExternal, "External Recommender", "Внешняя рекомендательная система")
+System_Ext(monitoring, "Monitoring & Logging", "Prometheus / Grafana / ELK")
+System_Ext(identitySSO, "SSO Providers", "OAuth / Social Logins (Google, Apple...)")
+
+' Interactions
+Rel(customer, webApp, "Использует", "HTTPS")
+Rel(webApp, apiGateway, "Calls", "HTTPS / gRPC")
+Rel(apiGateway, authService, "Auth / Token validation", "gRPC / JWT")
+Rel(apiGateway, catalog, "Get metadata (movies, details)", "gRPC/REST")
+Rel(apiGateway, content, "Request streaming URLs / playback manifests", "gRPC/REST")
+Rel(apiGateway, subscription, "Manage subscriptions", "gRPC/REST")
+Rel(apiGateway, payments, "Process payments (initiates)", "gRPC/REST")
+Rel(apiGateway, search, "Search queries", "gRPC/REST")
+Rel(apiGateway, recommender, "Get personalized recommendations", "Async / HTTP")
+Rel(apiGateway, notifications, "Trigger notifications", "gRPC/REST")
+Rel(apiGateway, analytics, "Emit events (page/view/play)", "Publish event")
+
+Rel(admin, adminUI, "Manages content & metadata", "HTTPS")
+Rel(adminUI, catalog, "CRUD metadata", "gRPC/REST")
+Rel(adminUI, content, "Upload/ingest content (store manifests)", "gRPC/REST")
+
+Rel(payments, paymentProvider, "Charge card / receive webhooks", "HTTPS")
+Rel(subscription, payments, "Request charge / reconcile", "Async (Kafka) / REST")
+Rel(catalog, cdn, "Provide streaming URLs / thumbnails", "S3/HTTP")
+Rel(recommender, recSystemExternal, "Get recommendations", "HTTP")
+
+Rel(analytics, monitoring, "Send metrics and logs", "Prometheus / ELK")
+@enduml
